@@ -3,38 +3,55 @@
  *
  * Usage:
  *   const { AgentDash } = require("agentdash");
- *   const dash = new AgentDash({ url: "http://localhost:4242", apiKey: "secret" });
+ *   const dash = new AgentDash({ url: "http://localhost:4242" });
  *
  *   const run = dash.startRun("my-agent");
  *   await run.log("Hello");
- *
- *   // Nested spans
- *   const span = run.span("research-phase");
- *   await span.start();
- *   await span.log("fetching...");
- *   await span.end("success");
- *
  *   await run.end("success");
  */
 
 const { randomUUID } = require("crypto");
-
 const WS = typeof WebSocket !== "undefined" ? WebSocket : require("ws");
 
 const MAX_QUEUE   = 500;
 const BACKOFF_MIN = 3000;
 const BACKOFF_MAX = 60000;
 
+// Per-model pricing (input $/M, output $/M)
+const MODEL_PRICING = {
+  "claude-opus-4-7":            [15.0,  75.0],
+  "claude-sonnet-4-6":          [3.0,   15.0],
+  "claude-haiku-4-5-20251001":  [0.8,    4.0],
+  "claude-3-5-sonnet-20241022": [3.0,   15.0],
+  "claude-3-5-haiku-20241022":  [0.8,    4.0],
+  "gpt-4o":                     [2.5,   10.0],
+  "gpt-4o-mini":                [0.15,   0.6],
+  "gpt-4-turbo":                [10.0,  30.0],
+  "gpt-3.5-turbo":              [0.5,    1.5],
+  "o1":                         [15.0,  60.0],
+  "o1-mini":                    [3.0,   12.0],
+};
+
+function computeCost(model, inTok, outTok) {
+  let pricing = MODEL_PRICING[model];
+  if (!pricing) {
+    const key = Object.keys(MODEL_PRICING).find((k) => model.startsWith(k));
+    pricing = key ? MODEL_PRICING[key] : null;
+  }
+  if (!pricing) return 0;
+  return Math.round((inTok * pricing[0] + outTok * pricing[1]) / 1_000_000 * 1e8) / 1e8;
+}
+
 // ── Span ──────────────────────────────────────────────────────────────────────
 
 class Span {
   constructor(name, runId, client, parentSpanId = null) {
-    this.spanId       = randomUUID();
-    this.name         = name;
-    this._runId       = runId;
-    this._client      = client;
+    this.spanId        = randomUUID();
+    this.name          = name;
+    this._runId        = runId;
+    this._client       = client;
     this._parentSpanId = parentSpanId;
-    this._ended       = false;
+    this._ended        = false;
   }
 
   _now() { return new Date().toISOString(); }
@@ -66,6 +83,16 @@ class Span {
       type: "mcp_call", runId: this._runId, spanId: this.spanId,
       server, tool, kind, input, output, duration_ms: durationMs, error,
       timestamp: this._now(),
+    });
+  }
+
+  llmCall({ model, messages = [], response = "", inputTokens = 0, outputTokens = 0, durationMs = 0 }) {
+    const cost = computeCost(model, inputTokens, outputTokens);
+    return this._client._send({
+      type: "llm_call", runId: this._runId, spanId: this.spanId,
+      model, messages, response,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      cost_usd: cost, duration_ms: durationMs, timestamp: this._now(),
     });
   }
 
@@ -115,6 +142,16 @@ class AgentRun {
     });
   }
 
+  llmCall({ model, messages = [], response = "", inputTokens = 0, outputTokens = 0, durationMs = 0 }) {
+    const cost = computeCost(model, inputTokens, outputTokens);
+    return this._client._send({
+      type: "llm_call", runId: this.runId,
+      model, messages, response,
+      input_tokens: inputTokens, output_tokens: outputTokens,
+      cost_usd: cost, duration_ms: durationMs, timestamp: this._now(),
+    });
+  }
+
   /** Create a top-level span. Call span.start() to open it. */
   span(name) {
     return new Span(name, this.runId, this._client, null);
@@ -132,8 +169,8 @@ class AgentRun {
 class AgentDash {
   /**
    * @param {object} opts
-   * @param {string}  opts.url    - AgentDash server URL (default: http://localhost:4242)
-   * @param {string}  [opts.apiKey] - API key (must match AGENTDASH_API_KEY on the server)
+   * @param {string} opts.url      AgentDash server URL (default: http://localhost:4242)
+   * @param {string} [opts.apiKey] API key matching AGENTDASH_API_KEY on the server
    */
   constructor({ url = "http://localhost:4242", apiKey = null } = {}) {
     this._baseUrl = url.replace(/\/$/, "");
@@ -179,7 +216,7 @@ class AgentDash {
       this._ws.send(payload);
     } else {
       if (this._queue.length >= MAX_QUEUE) {
-        console.warn(`[AgentDash] Queue full (${MAX_QUEUE}) — oldest event dropped`);
+        console.warn(`[AgentDash] Queue full — oldest event dropped`);
         this._queue.shift();
       }
       this._queue.push(payload);
@@ -187,15 +224,25 @@ class AgentDash {
     return Promise.resolve();
   }
 
-  startRun(agentName) {
+  /**
+   * Start a new run.
+   * @param {string} agentName
+   * @param {object} [opts]
+   * @param {string} [opts.project]     Project/namespace for this agent (e.g. "sales-bot")
+   * @param {string} [opts.parentRunId] ID of a parent run for multi-agent hierarchies
+   */
+  startRun(agentName, { project = "", parentRunId = null } = {}) {
     const runId = randomUUID();
-    this._send({ type: "run_start", runId, agentName, timestamp: new Date().toISOString() });
+    this._send({
+      type: "run_start", runId, agentName,
+      project: project || "",
+      parentRunId: parentRunId || undefined,
+      timestamp: new Date().toISOString(),
+    });
     return new AgentRun(runId, agentName, this);
   }
 
-  close() {
-    this._ws?.close();
-  }
+  close() { this._ws?.close(); }
 }
 
 // ── MCPInstrumentation ────────────────────────────────────────────────────────
@@ -204,13 +251,7 @@ class AgentDash {
  * Wraps an MCP Client so every callTool() and readResource() is automatically
  * logged to AgentDash as an mcp_call event.
  *
- * Works with @modelcontextprotocol/sdk Client.
- *
  * Usage:
- *   const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
- *   const { MCPInstrumentation } = require("agentdash");
- *
- *   const run = dash.startRun("my-agent");
  *   const instr = new MCPInstrumentation(run, "filesystem");
  *   client = instr.wrap(client);
  *   await client.callTool({ name: "read_file", arguments: { path: "/tmp/a.txt" } });
@@ -224,50 +265,31 @@ class MCPInstrumentation {
   wrap(client) {
     const target = this._target;
     const server = this._serverName;
-
     const origCallTool     = client.callTool.bind(client);
     const origReadResource = client.readResource.bind(client);
 
     client.callTool = async (params, ...args) => {
-      const t0 = Date.now();
-      let error = null, result = null;
-      try {
-        result = await origCallTool(params, ...args);
-        return result;
-      } catch (e) {
-        error = e.message;
-        throw e;
-      } finally {
+      const t0 = Date.now(); let error = null, result = null;
+      try { result = await origCallTool(params, ...args); return result; }
+      catch (e) { error = e.message; throw e; }
+      finally {
         target.mcpCall({
-          server,
-          tool: params.name,
-          kind: "tool",
-          input: params.arguments || {},
-          output: result?.content ?? null,
-          durationMs: Date.now() - t0,
-          error,
+          server, tool: params.name, kind: "tool",
+          input: params.arguments || {}, output: result?.content ?? null,
+          durationMs: Date.now() - t0, error,
         });
       }
     };
 
     client.readResource = async (params, ...args) => {
-      const t0 = Date.now();
-      let error = null, result = null;
-      try {
-        result = await origReadResource(params, ...args);
-        return result;
-      } catch (e) {
-        error = e.message;
-        throw e;
-      } finally {
+      const t0 = Date.now(); let error = null, result = null;
+      try { result = await origReadResource(params, ...args); return result; }
+      catch (e) { error = e.message; throw e; }
+      finally {
         target.mcpCall({
-          server,
-          tool: params.uri,
-          kind: "resource",
-          input: { uri: params.uri },
-          output: result?.contents ?? null,
-          durationMs: Date.now() - t0,
-          error,
+          server, tool: params.uri, kind: "resource",
+          input: { uri: params.uri }, output: result?.contents ?? null,
+          durationMs: Date.now() - t0, error,
         });
       }
     };
@@ -276,4 +298,4 @@ class MCPInstrumentation {
   }
 }
 
-module.exports = { AgentDash, AgentRun, Span, MCPInstrumentation };
+module.exports = { AgentDash, AgentRun, Span, MCPInstrumentation, computeCost };

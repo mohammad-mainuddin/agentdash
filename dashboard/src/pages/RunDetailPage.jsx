@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
 } from "recharts";
@@ -52,6 +52,71 @@ function LogStream({ events }) {
         })
       )}
       <div ref={bottomRef} />
+    </div>
+  );
+}
+
+// ── LLMCallCard ───────────────────────────────────────────────────────────────
+
+function LLMCallCard({ event }) {
+  const [open, setOpen] = useState(false);
+  const d = event.data || {};
+  const messages = d.messages || [];
+
+  const costDisplay = d.cost_usd > 0
+    ? d.cost_usd >= 0.01 ? `$${d.cost_usd.toFixed(2)}` : `$${d.cost_usd.toFixed(4)}`
+    : null;
+
+  return (
+    <div className="card overflow-hidden animate-fade-in border-l-2 border-terminal-cyan">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-terminal-muted/30 transition-colors text-left"
+      >
+        <span className="text-terminal-cyan text-sm">◈</span>
+        <span className="flex-1 text-sm font-medium text-terminal-text">{d.model}</span>
+        <span className="text-xs text-terminal-dim">{d.input_tokens} → {d.output_tokens} tok</span>
+        {costDisplay && (
+          <span className="text-xs text-terminal-purple font-mono">{costDisplay}</span>
+        )}
+        <span className="text-xs text-terminal-dim ml-1">{d.duration_ms}ms</span>
+        <span className="text-xs text-terminal-dim ml-2">{ts(event.timestamp)}</span>
+        <span className="text-terminal-dim text-xs ml-2">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-terminal-border p-4 space-y-2 max-h-[32rem] overflow-auto">
+          {messages.map((msg, i) => {
+            const content = typeof msg.content === "string"
+              ? msg.content
+              : JSON.stringify(msg.content, null, 2);
+            const roleColor = msg.role === "user"
+              ? "text-terminal-green"
+              : msg.role === "assistant"
+              ? "text-terminal-cyan"
+              : "text-terminal-dim";
+            const bgColor = msg.role === "user"
+              ? "bg-terminal-muted/40"
+              : "bg-terminal-cyan/5 border border-terminal-cyan/15";
+            return (
+              <div key={i} className={`rounded p-3 text-xs ${bgColor}`}>
+                <div className={`font-mono uppercase mb-1 font-semibold ${roleColor}`}>{msg.role}</div>
+                <pre className="whitespace-pre-wrap break-all font-mono text-terminal-text leading-relaxed">
+                  {content}
+                </pre>
+              </div>
+            );
+          })}
+          {d.response && (
+            <div className="rounded p-3 text-xs bg-terminal-cyan/5 border border-terminal-cyan/20">
+              <div className="font-mono uppercase mb-1 font-semibold text-terminal-cyan">response</div>
+              <pre className="whitespace-pre-wrap break-all font-mono text-terminal-text leading-relaxed">
+                {d.response}
+              </pre>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -279,9 +344,11 @@ export default function RunDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { subscribe } = useWs();
-  const [run, setRun] = useState(null);
+  const [run, setRun]       = useState(null);
   const [events, setEvents] = useState([]);
-  const [tab, setTab] = useState("logs");
+  const [tab, setTab]       = useState("logs");
+  const [compareRuns, setCompareRuns] = useState([]);
+  const [showCompare, setShowCompare] = useState(false);
 
   const load = () =>
     api.getRun(id)
@@ -302,6 +369,13 @@ export default function RunDetailPage() {
     navigate("/runs");
   };
 
+  const openCompare = async () => {
+    if (!run) return;
+    const all = await api.getRuns({ q: run.agent_name });
+    setCompareRuns(all.filter((r) => r.id !== id).slice(0, 10));
+    setShowCompare(true);
+  };
+
   if (!run) {
     return (
       <div className="flex-1 flex items-center justify-center text-terminal-dim">
@@ -312,11 +386,17 @@ export default function RunDetailPage() {
 
   const toolCalls = events.filter((e) => e.type === "tool_call");
   const mcpCalls  = events.filter((e) => e.type === "mcp_call");
-  const hasSpans  = events.some((e) => e.type === "span_start");
+  const llmCalls  = events.filter((e) => e.type === "llm_call");
+  const hasSpans  = events.some((e)  => e.type === "span_start");
+
+  const costDisplay = run.cost_usd > 0
+    ? run.cost_usd >= 0.01 ? `$${run.cost_usd.toFixed(2)}` : `$${run.cost_usd.toFixed(4)}`
+    : "$0.00";
 
   const TABS = [
     { key: "logs",     label: `Logs (${events.filter(e => e.type === "log").length})` },
-    { key: "tools",    label: `Tool Calls (${toolCalls.length})` },
+    { key: "prompts",  label: `Prompts (${llmCalls.length})` },
+    { key: "tools",    label: `Tools (${toolCalls.length})` },
     { key: "mcp",      label: `MCP (${mcpCalls.length})` },
     { key: "tokens",   label: "Tokens" },
     { key: "timeline", label: hasSpans ? "Span Tree" : "Timeline" },
@@ -331,21 +411,70 @@ export default function RunDetailPage() {
             ← Back to runs
           </button>
           <h1 className="text-xl font-display font-bold text-terminal-text">{run.agent_name}</h1>
-          <div className="flex items-center gap-3 mt-1">
+          <div className="flex items-center gap-3 mt-1 flex-wrap">
             <StatusBadge status={run.status} />
             <span className="text-xs text-terminal-dim font-mono">{run.id}</span>
+            {run.parent_run_id && (
+              <Link to={`/runs/${run.parent_run_id}`}
+                className="text-xs text-terminal-purple hover:underline">
+                ↳ parent run
+              </Link>
+            )}
           </div>
         </div>
-        <button onClick={handleDelete} className="btn-danger text-xs">Delete Run</button>
+        <div className="flex gap-2 relative">
+          <button onClick={openCompare} className="btn-primary text-xs bg-terminal-surface border-terminal-border text-terminal-dim hover:text-terminal-text">
+            ⇄ Compare
+          </button>
+          <a href={api.getExportUrl(id)} download className="btn-primary text-xs">↓ Export</a>
+          <button onClick={handleDelete} className="btn-danger text-xs">Delete Run</button>
+
+          {/* Compare picker dropdown */}
+          {showCompare && (
+            <div className="absolute right-0 top-9 z-50 w-80 card border border-terminal-border shadow-xl">
+              <div className="px-4 py-2 border-b border-terminal-border flex items-center justify-between">
+                <span className="text-xs font-semibold text-terminal-text">Compare with…</span>
+                <button onClick={() => setShowCompare(false)} className="text-terminal-dim hover:text-terminal-text text-xs">✕</button>
+              </div>
+              {compareRuns.length === 0 ? (
+                <div className="px-4 py-6 text-xs text-terminal-dim text-center">
+                  No other runs for "{run.agent_name}"
+                </div>
+              ) : (
+                compareRuns.map((r) => (
+                  <button
+                    key={r.id}
+                    onClick={() => navigate(`/compare?a=${id}&b=${r.id}`)}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-terminal-muted/30 border-b border-terminal-border/30 text-left transition-colors"
+                  >
+                    <span className={`text-xs w-2 h-2 rounded-full flex-shrink-0 ${
+                      r.status === "success" ? "bg-terminal-green" :
+                      r.status === "error"   ? "bg-terminal-red" : "bg-terminal-amber"
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs text-terminal-text truncate">{r.id.slice(0, 8)}…</div>
+                      <div className="text-[10px] text-terminal-dim">{new Date(r.started_at).toLocaleString()}</div>
+                    </div>
+                    <span className={`text-[10px] ${
+                      r.status === "success" ? "text-terminal-green" :
+                      r.status === "error"   ? "text-terminal-red" : "text-terminal-amber"
+                    }`}>{r.status}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Meta row */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-5 gap-3 mb-6">
         {[
           { label: "Started",  value: new Date(run.started_at).toLocaleString() },
           { label: "Duration", value: elapsed(run.started_at, run.ended_at) },
           { label: "Events",   value: events.length },
           { label: "Tokens",   value: `~${run.token_count?.toLocaleString() || "0"}` },
+          { label: "Cost",     value: costDisplay },
         ].map(({ label, value }) => (
           <div key={label} className="card px-4 py-3">
             <div className="text-xs text-terminal-dim uppercase tracking-wider mb-1">{label}</div>
@@ -373,6 +502,21 @@ export default function RunDetailPage() {
 
       {/* Tab panels */}
       {tab === "logs" && <LogStream events={events} />}
+
+      {tab === "prompts" && (
+        <div className="space-y-2">
+          {llmCalls.length === 0 ? (
+            <div className="card p-8 text-center text-terminal-dim text-sm">
+              No LLM calls recorded
+              <div className="text-xs mt-2 text-terminal-dim/60">
+                Use AnthropicInstrumentation or OpenAIInstrumentation to capture full prompt/response data
+              </div>
+            </div>
+          ) : (
+            llmCalls.map((e, i) => <LLMCallCard key={e.id || i} event={e} />)
+          )}
+        </div>
+      )}
 
       {tab === "tools" && (
         <div className="space-y-2">
@@ -422,6 +566,28 @@ export default function RunDetailPage() {
             ? <div className="text-terminal-dim text-sm text-center py-8">No events yet</div>
             : <SpanTimeline events={events} />
           }
+        </div>
+      )}
+
+      {/* Child runs */}
+      {run.children?.length > 0 && (
+        <div className="mt-6">
+          <div className="text-xs text-terminal-dim uppercase tracking-wider mb-3">
+            Child Runs ({run.children.length})
+          </div>
+          <div className="space-y-2">
+            {run.children.map((child) => (
+              <div key={child.id}
+                onClick={() => navigate(`/runs/${child.id}`)}
+                className="card px-4 py-3 flex items-center gap-3 cursor-pointer
+                           hover:bg-terminal-muted/30 transition-colors">
+                <span className="text-terminal-purple text-xs">↳</span>
+                <span className="flex-1 text-sm text-terminal-text">{child.agent_name}</span>
+                <StatusBadge status={child.status} />
+                <span className="text-xs text-terminal-dim font-mono">{child.id.slice(0, 8)}…</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>

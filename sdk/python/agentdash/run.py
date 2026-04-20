@@ -60,6 +60,23 @@ class AgentRun:
             "timestamp": self._now(),
         })
 
+    def llm_call(self, model: str, messages: list, response: str = "",
+                 input_tokens: int = 0, output_tokens: int = 0,
+                 cost_usd: float = 0.0, duration_ms: int = 0):
+        """Record a full LLM call with prompt messages and response."""
+        self._client._send({
+            "type": "llm_call",
+            "runId": self.run_id,
+            "model": model,
+            "messages": messages,
+            "response": response,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "cost_usd": cost_usd,
+            "duration_ms": duration_ms,
+            "timestamp": self._now(),
+        })
+
     def mcp_call(self, server: str, tool: str, kind: str = "tool",
                  input: Any = None, output: Any = None,
                  duration_ms: int = 0, error: "str | None" = None):

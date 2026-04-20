@@ -3,7 +3,8 @@
  */
 
 function getBaseUrl() {
-  return localStorage.getItem("agentdash_server") || `${window.location.protocol}//${window.location.hostname}:4242`;
+  return localStorage.getItem("agentdash_server")
+    || `${window.location.protocol}//${window.location.hostname}:4242`;
 }
 
 async function request(path, options = {}) {
@@ -16,9 +17,24 @@ async function request(path, options = {}) {
 }
 
 export const api = {
-  getRuns: () => request("/runs"),
-  getRun: (id) => request(`/runs/${id}`),
-  deleteRun: (id) => request(`/runs/${id}`, { method: "DELETE" }),
-  deleteOldRuns: (days) => request(`/runs?olderThan=${days}`, { method: "DELETE" }),
-  getStats: () => request("/stats"),
+  getRuns: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v))
+    ).toString();
+    return request(`/runs${qs ? "?" + qs : ""}`);
+  },
+  getRun:           (id)   => request(`/runs/${id}`),
+  deleteRun:        (id)   => request(`/runs/${id}`, { method: "DELETE" }),
+  deleteOldRuns:    (days) => request(`/runs?olderThan=${days}`, { method: "DELETE" }),
+  getStats:         ()     => request("/stats"),
+  getSettings:      ()     => request("/settings"),
+  saveSettings:     (body) => request("/settings", { method: "PUT", body: JSON.stringify(body) }),
+  testWebhook:      ()     => request("/settings/test-webhook", { method: "POST" }),
+  getExportUrl:     (id)   => `${getBaseUrl()}/runs/${id}/export`,
+  getProjects:      ()     => request("/projects"),
+  getProjectAgents: (name) => request(`/projects/${encodeURIComponent(name)}/agents`),
+  getTrends:        (params = {}) => {
+    const qs = new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([,v]) => v))).toString();
+    return request(`/stats/trends${qs ? "?" + qs : ""}`);
+  },
 };

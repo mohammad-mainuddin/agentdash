@@ -3,9 +3,11 @@ import { NavLink } from "react-router-dom";
 import { useWs } from "../context/WsContext";
 
 const NAV = [
-  { to: "/",        label: "Overview",  icon: "⬡" },
-  { to: "/runs",    label: "Runs",      icon: "▶" },
-  { to: "/settings",label: "Settings", icon: "⚙" },
+  { to: "/",         label: "Overview",  icon: "⬡" },
+  { to: "/runs",     label: "Runs",      icon: "▶" },
+  { to: "/projects", label: "Projects",  icon: "◫" },
+  { to: "/trends",   label: "Trends",    icon: "◈" },
+  { to: "/settings", label: "Settings",  icon: "⚙" },
 ];
 
 export default function Sidebar() {

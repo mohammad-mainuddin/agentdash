@@ -2,21 +2,42 @@
 
 **Self-hosted, real-time monitoring dashboard for AI agents.**
 
-AgentDash gives you a terminal-style dashboard to observe every log, tool call, span, and token your agents produce — live, as they happen. No cloud required.
+AgentDash gives you a terminal-style dashboard to observe every log, tool call, MCP interaction, LLM prompt/response, token count, and dollar cost your agents produce — live, as they happen. Monitor one agent or fifty agents across ten teams. No cloud required.
 
-[![CI](https://github.com/yourname/agentdash/actions/workflows/ci.yml/badge.svg)](https://github.com/yourname/agentdash/actions)
+[![CI](https://github.com/mohammad-mainuddin/agentdash/actions/workflows/ci.yml/badge.svg)](https://github.com/mohammad-mainuddin/agentdash/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![PyPI](https://img.shields.io/pypi/v/agentdash)](https://pypi.org/project/agentdash/)
-[![npm](https://img.shields.io/npm/v/agentdash)](https://www.npmjs.com/package/agentdash)
+
+---
+
+## What it does
+
+| Feature | Detail |
+|---|---|
+| **Real-time event stream** | Every log, tool call, MCP call, and LLM response appears instantly via WebSocket |
+| **Prompt inspector** | Full message history sent to the LLM + response for every API call |
+| **Cost tracking** | Per-run and total USD cost from real token counts and current model pricing |
+| **MCP monitoring** | Capture every MCP tool call and resource read — input, output, duration, errors |
+| **Span tree** | Nested, indented timeline of every phase in multi-step agents |
+| **Alerts** | Webhook notifications (Slack, Discord, custom) on error, token budget, or time limit |
+| **Projects / Namespaces** | Group agents by project — each team sees their own agents, runs, tokens, and cost |
+| **Agent registry** | See every agent as a persistent entity — run count, error rate, avg duration, last seen |
+| **Trend charts** | Runs/day, tokens/day, cost/day, error rate % over 7d / 14d / 30d — per project or global |
+| **Run comparison** | Side-by-side diff of any two runs — events, prompts, tools, token delta, cost delta |
+| **Search & filter** | Filter runs by project, agent name, status, or date range |
+| **Multi-agent linking** | Link child runs to parent — see full orchestrator/subagent hierarchies |
+| **Run export** | Download any run as JSON for offline analysis |
+| **Data retention** | Auto-delete old runs on a configurable schedule |
+| **Dark & light mode** | Full theme switching |
+| **SDK resilience** | 500-event queue, exponential backoff (3s→60s), context-manager auto-close |
 
 ---
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/yourname/agentdash
+git clone https://github.com/mohammad-mainuddin/agentdash
 cd agentdash
-docker-compose up
+docker compose up
 ```
 
 - **Dashboard** → http://localhost:3000
@@ -26,30 +47,32 @@ docker-compose up
 
 ## Install the SDK
 
+**Python:**
 ```bash
-pip install agentdash           # core
-pip install agentdash[tiktoken] # + accurate token counting
-pip install agentdash[all]      # + tiktoken + Anthropic instrumentation
+pip install agentdash                # core
+pip install agentdash[tiktoken]      # + accurate token counting
+pip install agentdash[all]           # + tiktoken + Anthropic
 ```
 
+**JavaScript:**
 ```bash
 npm install agentdash
 ```
 
 ---
 
-## Connect an Agent (Python)
+## Basic Usage (Python)
 
 ```python
 from agentdash import AgentDash
 
 dash = AgentDash(url="http://localhost:4242")
 
-with dash.start_run(agent_name="my-agent") as run:
+with dash.start_run(agent_name="my-agent", project="sales-bot") as run:
     run.log("Starting task")
     run.tool_call(
         tool="web_search",
-        input={"query": "Claude Managed Agents"},
+        input={"query": "latest AI papers"},
         output={"results": [...]},
         duration_ms=320,
     )
@@ -58,30 +81,57 @@ with dash.start_run(agent_name="my-agent") as run:
 
 ---
 
-## Nested Spans
+## Projects — Team-Scale Monitoring
 
-Group related work into named phases. Spans can be nested arbitrarily:
+Assign a `project` to every agent. AgentDash groups them so each team sees their own agents, runs, cost, and error rates on the **Projects** page.
 
 ```python
-with dash.start_run("research-agent") as run:
-    with run.span("research") as s:
-        s.log("gathering sources")
+# sales team
+with dash.start_run("lead-qualifier",  project="sales-bot") as run: ...
+with dash.start_run("email-drafter",   project="sales-bot") as run: ...
 
-        with s.span("fetch-pages") as fetch:
-            fetch.tool_call(tool="http_get", input={"url": "..."}, output={...}, duration_ms=450)
+# HR team
+with dash.start_run("resume-screener", project="hr-pipeline") as run: ...
+with dash.start_run("onboarding-bot",  project="hr-pipeline") as run: ...
 
-        with s.span("summarise") as summ:
-            summ.tool_call(tool="llm", input={"prompt": "..."}, output={...}, duration_ms=1200)
+# data team
+with dash.start_run("etl-agent",       project="data-pipeline") as run: ...
+with dash.start_run("anomaly-detector",project="data-pipeline") as run: ...
 ```
 
-The **Span Tree** tab in the dashboard renders the full nested timeline.
+The **Projects** page shows each project as a card — run count, active agents, total tokens, total cost, error rate. Click a project to open the **Agent Registry**: every agent with its run history, average duration, and last seen time.
 
 ---
 
-## Auto-Instrumentation (Anthropic)
+## Trend Charts
 
-Zero manual logging — wrap the Anthropic client and every LLM call is tracked automatically with **real token counts** from the API response:
+The **Trends** page shows 4 charts over a selectable period (7d / 14d / 30d), filterable by project:
 
+- **Runs per day** — how active are your agents
+- **Tokens per day** — usage growth over time
+- **Cost per day (¢)** — spend pattern, spikes, and anomalies
+- **Error rate %** — is reliability improving or degrading
+
+---
+
+## Run Comparison
+
+On any run detail page, click **⇄ Compare** to pick another run of the same agent. AgentDash opens a side-by-side view showing:
+
+- **Diff summary** — token delta, cost delta, duration delta, tools present in one run but not the other
+- **Events tab** — both runs' event streams side by side
+- **Prompts tab** — LLM messages and responses compared
+- **Tools tab** — tool calls with inputs and outputs
+
+Typical use: a run failed → you fix it → re-run → compare the new run to the failed one to confirm the fix.
+
+---
+
+## Auto-Instrumentation
+
+Wrap your LLM client and every call is tracked automatically — full prompt, response, exact token counts, and cost appear in the **Prompts** tab:
+
+**Anthropic:**
 ```python
 import anthropic
 from agentdash import AgentDash, AnthropicInstrumentation
@@ -89,139 +139,148 @@ from agentdash import AgentDash, AnthropicInstrumentation
 dash   = AgentDash(url="http://localhost:4242")
 client = anthropic.Anthropic()
 
-with dash.start_run("my-agent") as run:
+with dash.start_run("my-agent", project="sales-bot") as run:
     client = AnthropicInstrumentation(run).wrap(client)
-
-    # All calls below are automatically logged — inputs, outputs, token counts
     response = client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=1024,
-        messages=[{"role": "user", "content": "Hello!"}],
+        messages=[{"role": "user", "content": "Summarise transformer attention"}],
     )
 ```
 
-### OpenAI
-
+**OpenAI:**
 ```python
 import openai
 from agentdash import AgentDash, OpenAIInstrumentation
 
-dash   = AgentDash(url="http://localhost:4242")
-client = openai.OpenAI()
-
-with dash.start_run("my-agent") as run:
-    client = OpenAIInstrumentation(run).wrap(client)
+with dash.start_run("my-agent", project="data-pipeline") as run:
+    client = OpenAIInstrumentation(run).wrap(openai.OpenAI())
     response = client.chat.completions.create(...)
 ```
 
 ---
 
-## Connect an Agent (JavaScript)
+## MCP Server Monitoring
+
+Wrap your MCP session and every `call_tool` / `read_resource` is captured automatically:
+
+```python
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from agentdash import AgentDash, AnthropicInstrumentation, MCPInstrumentation
+
+dash = AgentDash(url="http://localhost:4242")
+
+async with stdio_client(StdioServerParameters(
+    command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+)) as (read, write):
+    async with ClientSession(read, write) as session:
+        await session.initialize()
+
+        with dash.start_run("mcp-agent", project="my-project") as run:
+            client  = AnthropicInstrumentation(run).wrap(anthropic.Anthropic())
+            session = MCPInstrumentation(run, server_name="filesystem").wrap(session)
+```
+
+---
+
+## Spans — Nested Phases
+
+Group work into named phases. Spans nest arbitrarily and appear as a collapsible tree:
+
+```python
+with dash.start_run("research-agent", project="data-pipeline") as run:
+    with run.span("research") as s:
+        s.log("gathering sources")
+
+        with s.span("fetch") as fetch:
+            fetch.tool_call(tool="http_get", input={"url": "..."}, output={...}, duration_ms=450)
+
+        with s.span("summarise") as summ:
+            summ.log("calling LLM")
+```
+
+---
+
+## Multi-Agent Linking
+
+Link child agents to their parent — the dashboard shows the hierarchy:
+
+```python
+with dash.start_run("orchestrator", project="sales-bot") as parent:
+    parent.log("Spawning sub-agents")
+
+    with dash.start_run("sub-agent-1", project="sales-bot", parent_run_id=parent.run_id) as child:
+        child.log("Working on subtask")
+```
+
+Child runs appear under the parent and show a `↳ child` label in the runs list.
+
+---
+
+## Alerts
+
+Configure webhook alerts in **Settings**. Fires a POST to your URL when:
+- A run ends with `status=error`
+- Token count exceeds your budget
+- Run duration exceeds your time limit
+
+Works with Slack, Discord, n8n, Make, or any custom endpoint.
+
+**Webhook payload:**
+```json
+{
+  "event": "agentdash_alert",
+  "reasons": ["run_error"],
+  "run": {
+    "id": "...",
+    "agent_name": "my-agent",
+    "status": "error",
+    "token_count": 4821,
+    "cost_usd": 0.0144,
+    "duration_s": 47
+  },
+  "timestamp": "2026-04-20T11:00:00Z"
+}
+```
+
+---
+
+## JavaScript SDK
 
 ```js
 const { AgentDash } = require("agentdash");
-
 const dash = new AgentDash({ url: "http://localhost:4242" });
-const run  = dash.startRun("my-agent");
 
-await run.log("Starting task");
+const run = dash.startRun("my-agent", { project: "sales-bot" });
+await run.log("Starting");
 await run.toolCall({ tool: "search", input: { q: "hello" }, output: {}, durationMs: 100 });
+await run.llmCall({ model: "gpt-4o", messages: [...], response: "...", inputTokens: 800, outputTokens: 200, durationMs: 1200 });
+await run.end("success");
+
+// Child run
+const child = dash.startRun("sub-agent", { project: "sales-bot", parentRunId: run.runId });
 
 // Spans
-const span = run.span("research-phase");
+const span = run.span("research");
 await span.start();
-await span.log("fetching pages");
+await span.log("fetching...");
 await span.end("success");
-
-await run.end("success");
 ```
 
 ---
 
-## Run the Examples
+## Dashboard Pages
 
-**Simulated agent** (no API key needed):
-
-```bash
-cd examples/simple_agent
-pip install -r ../../sdk/python/requirements.txt
-python agent.py "your research topic"
-```
-
-**Real Anthropic agent** (with auto-instrumentation):
-
-```bash
-export ANTHROPIC_API_KEY=sk-ant-...
-cd examples/anthropic_agent
-pip install anthropic agentdash[all]
-python agent.py "transformer attention mechanisms"
-```
-
-Watch both appear live at http://localhost:3000.
-
----
-
-## Repo Structure
-
-```
-agentdash/
-├── dashboard/            # React + Vite + TailwindCSS frontend
-│   └── src/
-│       ├── pages/        # Home, Runs, RunDetail (span tree), Settings
-│       ├── components/   # Sidebar, StatusBadge
-│       └── context/      # Settings, WebSocket
-│
-├── server/               # Node.js + Express + WebSocket backend
-│
-├── sdk/
-│   ├── python/           # Python SDK — pip install agentdash
-│   └── js/               # JavaScript SDK — npm install agentdash
-│
-├── examples/
-│   ├── simple_agent/     # Simulated research agent (no API key)
-│   └── anthropic_agent/  # Real Claude agent with auto-instrumentation
-│
-├── tests/
-│   ├── server.test.js    # Node.js server tests (Jest + supertest)
-│   └── test_sdk.py       # Python SDK unit tests (pytest)
-│
-├── .github/workflows/ci.yml
-├── docker-compose.yml
-├── CONTRIBUTING.md
-└── README.md
-```
-
----
-
-## Dashboard Features
-
-| Page | What you see |
+| Page | Contents |
 |---|---|
-| **Overview** | Active runs, total runs, token count, live activity feed |
-| **Runs** | Table of all runs with status, duration, token count |
-| **Run Detail** | Logs, Tool Calls, Tokens, Span Tree tabs — all live |
-| **Settings** | Server URL, dark/light mode, data retention cleanup |
-
-### Span Tree
-
-When your agent uses spans, the Timeline tab becomes a **Span Tree** — a nested, indented view of every phase, tool call, and log entry in the order they happened. Parent spans are shown with their children indented beneath them.
-
----
-
-## Architecture
-
-```
-Your Agent
-    │  WebSocket (ws://localhost:4242)
-    ▼
-AgentDash Server (Node.js + Express)
-    │  SQLite (persisted via Docker volume)
-    │  WebSocket broadcast
-    ▼
-AgentDash Dashboard (React)
-```
-
-All events flow through WebSocket in real time. SQLite persists between restarts via a Docker volume. No external dependencies.
+| **Overview** | Live activity feed, 4 stat cards (active runs, total runs, tokens, cost) |
+| **Runs** | Full run list — filter by project, agent name, status; cost and project badge per row |
+| **Run detail** | Logs, Prompts, Tools, MCP, Tokens, Timeline tabs + Compare + Export buttons |
+| **Compare** | Side-by-side diff of two runs — diff summary, events, prompts, tools |
+| **Projects** | Project cards with aggregate stats; click → agent registry for that project |
+| **Trends** | 4 charts (runs/day, tokens/day, cost/day, error rate %) with period + project filter |
+| **Settings** | Server URL, dark mode, alerts (webhook, on_error, token budget, time budget), retention |
 
 ---
 
@@ -229,20 +288,19 @@ All events flow through WebSocket in real time. SQLite persists between restarts
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/stats` | Aggregate stats (total, active, tokens, recent events) |
-| `GET` | `/runs` | List all runs |
-| `POST` | `/runs` | Create a run manually |
-| `GET` | `/runs/:id` | Get run + all events |
+| `GET` | `/stats` | Overview stats (runs, tokens, cost, LLM calls, recent events) |
+| `GET` | `/stats/trends` | Daily aggregates for charts — `?days=14&project=` |
+| `GET` | `/runs` | List runs — `?q=`, `?status=`, `?project=`, `?from=`, `?to=` |
+| `POST` | `/runs` | Create a run |
+| `GET` | `/runs/:id` | Run + events + child runs |
+| `GET` | `/runs/:id/export` | Download run as JSON |
 | `DELETE` | `/runs/:id` | Delete a run |
-| `DELETE` | `/runs?olderThan=7` | Bulk delete old runs |
-
-When `AGENTDASH_API_KEY` is set, all REST requests must include the key:
-
-```
-Authorization: Bearer <your-key>
-# or
-X-Api-Key: <your-key>
-```
+| `DELETE` | `/runs?olderThan=7` | Bulk delete runs older than N days |
+| `GET` | `/projects` | All projects with aggregate stats |
+| `GET` | `/projects/:name/agents` | Agent registry for a project |
+| `GET` | `/settings` | Get all settings |
+| `PUT` | `/settings` | Update settings |
+| `POST` | `/settings/test-webhook` | Send a test webhook |
 
 ---
 
@@ -265,58 +323,73 @@ services:
 ```
 
 ```python
-# Python SDK
 dash = AgentDash(url="http://localhost:4242", api_key="your-secret-key")
 ```
 
-```js
-// JavaScript SDK
-const dash = new AgentDash({ url: "http://localhost:4242", apiKey: "your-secret-key" });
+---
+
+## Repo Structure
+
+```
+agentdash/
+├── dashboard/           # React + Vite + Tailwind + Recharts frontend
+│   └── src/
+│       ├── pages/       # Overview, Runs, RunDetail, Compare, Projects, Trends, Settings
+│       ├── components/  # Sidebar, StatusBadge
+│       └── context/     # Settings, WebSocket
+│
+├── server/              # Node.js + Express + WebSocket (SQLite)
+│
+├── sdk/
+│   ├── python/          # Python SDK
+│   └── js/              # JavaScript SDK
+│
+├── examples/
+│   ├── simple_agent/    # No API key needed
+│   ├── anthropic_agent/ # Claude + auto-instrumentation
+│   └── mcp_agent/       # Claude + MCP filesystem server
+│
+├── tests/
+│   ├── server.test.js   # Jest + supertest
+│   └── test_sdk.py      # pytest
+│
+└── docker-compose.yml
 ```
 
 ---
 
-## SDK Reliability
+## Run the Examples
 
-Both SDKs include:
+```bash
+# No API key
+python examples/simple_agent/agent.py
 
-| Feature | Detail |
-|---|---|
-| **Event queue** | Events sent while disconnected are buffered (up to 500) and flushed on reconnect |
-| **Exponential backoff** | Reconnect delay starts at 3s, doubles each failure, caps at 60s |
-| **Context manager** | `with dash.start_run(...) as run:` — auto-calls `run.end("error")` on exception |
+# Claude + auto-instrumentation
+export ANTHROPIC_API_KEY=sk-ant-...
+pip install agentdash[all]
+python examples/anthropic_agent/agent.py "explain transformers"
 
----
+# Claude + MCP filesystem
+pip install agentdash[all] mcp
+python examples/mcp_agent/agent.py
+```
 
-## Token Counts
-
-Token counts are **accurate when tiktoken is installed** (`pip install agentdash[tiktoken]`), using the `cl100k_base` encoding. Without tiktoken, counts fall back to a character-length estimate (~1 token per 4 chars).
-
-Token counts from auto-instrumentation (Anthropic, OpenAI) always use the **exact counts from the API response**, regardless of tiktoken.
-
-The dashboard shows a `~` prefix on estimated counts to distinguish them from exact values.
+Open http://localhost:3000 to watch live.
 
 ---
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and PRs welcome.
-
-Quick setup:
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ```bash
-git clone https://github.com/yourname/agentdash
-docker-compose up
-pytest tests/test_sdk.py        # Python SDK tests
-npx jest tests/server.test.js   # Server tests
+docker compose up
+pytest tests/test_sdk.py -v
+node server/node_modules/.bin/jest tests/server.test.js --forceExit
 ```
 
 ---
 
 ## License
 
-MIT © AgentDash Contributors
-
----
-
-Built for engineers who want full observability over their AI agents without sending data to a third-party cloud.
+MIT — Built for engineers who want full observability over their AI agents without sending data to a third-party cloud.

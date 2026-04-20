@@ -32,6 +32,11 @@ from .client import AgentDash
 from .run import AgentRun
 from .span import Span
 from .instrumentation import AnthropicInstrumentation, OpenAIInstrumentation, MCPInstrumentation
+from .instrumentation import _compute_cost as compute_llm_cost
 
-__all__ = ["AgentDash", "AgentRun", "Span", "AnthropicInstrumentation", "OpenAIInstrumentation", "MCPInstrumentation"]
-__version__ = "1.0.0"
+__all__ = [
+    "AgentDash", "AgentRun", "Span",
+    "AnthropicInstrumentation", "OpenAIInstrumentation", "MCPInstrumentation",
+    "compute_llm_cost",
+]
+__version__ = "1.1.0"

@@ -2,6 +2,7 @@
 AgentDash client — manages the WebSocket connection to the server.
 """
 
+from __future__ import annotations
 import json
 import threading
 import time
@@ -122,20 +123,29 @@ class AgentDash:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    def start_run(self, agent_name: str) -> "AgentRun":
+    def start_run(
+        self,
+        agent_name: str,
+        project: str | None = None,
+        parent_run_id: str | None = None,
+    ) -> "AgentRun":
         """
         Start a new agent run and return a Run object for logging.
 
         Args:
-            agent_name: Human-readable name for this agent
+            agent_name:    Human-readable name for this agent
+            project:       Project/namespace this agent belongs to (e.g. "sales-bot", "hr-pipeline")
+            parent_run_id: ID of a parent run (for multi-agent hierarchies)
 
         Returns:
             AgentRun instance
         """
         run_id = str(uuid.uuid4())
         self._send({
-            "type": "run_start",
-            "runId": run_id,
-            "agentName": agent_name,
+            "type":        "run_start",
+            "runId":       run_id,
+            "agentName":   agent_name,
+            "project":     project or "",
+            "parentRunId": parent_run_id,
         })
         return AgentRun(run_id=run_id, agent_name=agent_name, client=self)
