@@ -162,6 +162,33 @@ function handleSdkEvent(event) {
       break;
     }
 
+    case "mcp_call": {
+      ensureRun(event.runId);
+      db.prepare(
+        `INSERT INTO events (id, run_id, type, data, timestamp) VALUES (?, ?, ?, ?, ?)`
+      ).run(
+        uuidv4(), event.runId, "mcp_call",
+        JSON.stringify({
+          server:      event.server,
+          tool:        event.tool,
+          kind:        event.kind || "tool",
+          input:       event.input,
+          output:      event.output,
+          duration_ms: event.duration_ms || 0,
+          error:       event.error || null,
+          spanId:      event.spanId || null,
+        }),
+        ts
+      );
+      const mcpTokens = resolveTokens(
+        event,
+        JSON.stringify(event.input || ""),
+        JSON.stringify(event.output || "")
+      );
+      db.prepare("UPDATE runs SET token_count = token_count + ? WHERE id = ?").run(mcpTokens, event.runId);
+      break;
+    }
+
     case "span_start": {
       ensureRun(event.runId);
       db.prepare(

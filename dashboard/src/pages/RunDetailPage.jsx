@@ -56,6 +56,57 @@ function LogStream({ events }) {
   );
 }
 
+// ── MCPCallCard ───────────────────────────────────────────────────────────────
+
+function MCPCallCard({ event }) {
+  const [open, setOpen] = useState(false);
+  const d = event.data || {};
+
+  const kindClass = {
+    tool:     "bg-terminal-purple/20 text-terminal-purple border-terminal-purple/30",
+    resource: "bg-terminal-cyan/20   text-terminal-cyan   border-terminal-cyan/30",
+    prompt:   "bg-terminal-amber/20  text-terminal-amber  border-terminal-amber/30",
+  }[d.kind] || "bg-terminal-muted text-terminal-dim border-terminal-border";
+
+  return (
+    <div className="card overflow-hidden animate-fade-in border-l-2 border-terminal-purple">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-terminal-muted/30 transition-colors text-left"
+      >
+        <span className="text-terminal-purple text-sm">⬡</span>
+        <span className={`text-xs px-1.5 py-0.5 rounded border font-mono flex-shrink-0 ${kindClass}`}>{d.kind || "tool"}</span>
+        <span className="flex-shrink-0 text-xs text-terminal-dim font-mono">{d.server}</span>
+        <span className="text-terminal-dim text-xs">›</span>
+        <span className="flex-1 text-sm font-medium text-terminal-text truncate">{d.tool}</span>
+        {d.error && <span className="text-xs text-terminal-red flex-shrink-0">error</span>}
+        <span className="text-xs text-terminal-dim">{d.duration_ms}ms</span>
+        <span className="text-xs text-terminal-dim ml-2">{ts(event.timestamp)}</span>
+        <span className="text-terminal-dim text-xs ml-2">{open ? "▲" : "▼"}</span>
+      </button>
+
+      {open && (
+        <div className="border-t border-terminal-border grid grid-cols-2 divide-x divide-terminal-border">
+          <div className="p-4">
+            <div className="text-xs text-terminal-dim uppercase tracking-wider mb-2">Input</div>
+            <pre className="text-xs text-terminal-text whitespace-pre-wrap break-all">
+              {JSON.stringify(d.input, null, 2)}
+            </pre>
+          </div>
+          <div className="p-4">
+            <div className="text-xs text-terminal-dim uppercase tracking-wider mb-2">
+              {d.error ? "Error" : "Output"}
+            </div>
+            <pre className={`text-xs whitespace-pre-wrap break-all ${d.error ? "text-terminal-red" : "text-terminal-purple"}`}>
+              {d.error || JSON.stringify(d.output, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── ToolCallCard ──────────────────────────────────────────────────────────────
 
 function ToolCallCard({ event }) {
@@ -169,16 +220,17 @@ function SpanTimeline({ events }) {
   });
 
   const typeStyle = {
-    run_start:  "border-terminal-green  text-terminal-green",
-    log:        "border-terminal-dim    text-terminal-dim",
-    tool_call:  "border-terminal-amber  text-terminal-amber",
-    run_end:    "border-terminal-cyan   text-terminal-cyan",
-    span_start: "border-terminal-cyan   text-terminal-cyan",
-    span_end:   "border-terminal-cyan   text-terminal-cyan",
+    run_start:  "border-terminal-green  bg-terminal-green",
+    log:        "border-terminal-dim    bg-terminal-dim",
+    tool_call:  "border-terminal-amber  bg-terminal-amber",
+    mcp_call:   "border-terminal-purple bg-terminal-purple",
+    run_end:    "border-terminal-cyan   bg-terminal-cyan",
+    span_start: "border-terminal-cyan   bg-terminal-cyan/50",
+    span_end:   "border-terminal-cyan   bg-terminal-cyan/30",
   };
   const typeIcon = {
     run_start: "▶", log: "›", tool_call: "⚡",
-    run_end: "■", span_start: "❯", span_end: "❮",
+    mcp_call: "⬡", run_end: "■", span_start: "❯", span_end: "❮",
   };
 
   return (
@@ -190,6 +242,7 @@ function SpanTimeline({ events }) {
         const label =
           e.type === "log"        ? e.data?.message :
           e.type === "tool_call"  ? `${e.data?.tool}() — ${e.data?.duration_ms}ms` :
+          e.type === "mcp_call"   ? `[${e.data?.server}] ${e.data?.tool} — ${e.data?.duration_ms}ms${e.data?.error ? " ✕" : ""}` :
           e.type === "run_start"  ? "run started" :
           e.type === "run_end"    ? `run ended · ${e.data?.status}` :
           e.type === "span_start" ? `span: ${e.data?.name}` :
@@ -258,11 +311,13 @@ export default function RunDetailPage() {
   }
 
   const toolCalls = events.filter((e) => e.type === "tool_call");
+  const mcpCalls  = events.filter((e) => e.type === "mcp_call");
   const hasSpans  = events.some((e) => e.type === "span_start");
 
   const TABS = [
     { key: "logs",     label: `Logs (${events.filter(e => e.type === "log").length})` },
     { key: "tools",    label: `Tool Calls (${toolCalls.length})` },
+    { key: "mcp",      label: `MCP (${mcpCalls.length})` },
     { key: "tokens",   label: "Tokens" },
     { key: "timeline", label: hasSpans ? "Span Tree" : "Timeline" },
   ];
@@ -325,6 +380,21 @@ export default function RunDetailPage() {
             <div className="card p-8 text-center text-terminal-dim text-sm">No tool calls recorded</div>
           ) : (
             toolCalls.map((e, i) => <ToolCallCard key={e.id || i} event={e} />)
+          )}
+        </div>
+      )}
+
+      {tab === "mcp" && (
+        <div className="space-y-2">
+          {mcpCalls.length === 0 ? (
+            <div className="card p-8 text-center text-terminal-dim text-sm">
+              No MCP calls recorded
+              <div className="text-xs mt-2 text-terminal-dim/60">
+                Wrap your MCP session with MCPInstrumentation to capture calls here
+              </div>
+            </div>
+          ) : (
+            mcpCalls.map((e, i) => <MCPCallCard key={e.id || i} event={e} />)
           )}
         </div>
       )}

@@ -1,9 +1,10 @@
 """
-Auto-instrumentation helpers for popular LLM SDKs.
+Auto-instrumentation helpers for popular LLM SDKs and MCP servers.
 Wraps SDK clients to automatically emit AgentDash events.
 """
 
 import time
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Union
 
 if TYPE_CHECKING:
@@ -118,3 +119,103 @@ class OpenAIInstrumentation:
 
         client.chat.completions.create = patched
         return client
+
+
+class MCPInstrumentation:
+    """
+    Wraps an MCP ClientSession so every call_tool() and read_resource() is
+    automatically logged to AgentDash as an mcp_call event.
+
+    Works with async MCP sessions (mcp.ClientSession from the mcp package).
+
+    Usage:
+        from mcp import ClientSession, StdioServerParameters
+        from mcp.client.stdio import stdio_client
+        from agentdash import AgentDash, MCPInstrumentation
+
+        dash = AgentDash(url="http://localhost:4242")
+
+        async with stdio_client(StdioServerParameters(command="npx", args=["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])) as (r, w):
+            async with ClientSession(r, w) as session:
+                await session.initialize()
+                with dash.start_run("mcp-agent") as run:
+                    session = MCPInstrumentation(run, server_name="filesystem").wrap(session)
+                    result = await session.call_tool("read_file", {"path": "/tmp/hello.txt"})
+    """
+
+    def __init__(self, target: Target, server_name: str = "mcp"):
+        self._target = target
+        self._server_name = server_name
+
+    def wrap(self, session):
+        """Patch session.call_tool and session.read_resource in-place and return the session."""
+        original_call_tool     = session.call_tool
+        original_read_resource = session.read_resource
+        target = self._target
+        server = self._server_name
+
+        async def patched_call_tool(name, arguments=None, **kwargs):
+            t0 = time.time()
+            error = None
+            result = None
+            try:
+                result = await original_call_tool(name, arguments, **kwargs)
+                return result
+            except Exception as e:
+                error = str(e)
+                raise
+            finally:
+                duration_ms = int((time.time() - t0) * 1000)
+                output = None
+                if result is not None:
+                    if hasattr(result, "content"):
+                        output = [
+                            c.model_dump() if hasattr(c, "model_dump") else str(c)
+                            for c in result.content
+                        ]
+                    else:
+                        output = str(result)
+                target.mcp_call(
+                    server=server,
+                    tool=name,
+                    kind="tool",
+                    input=arguments or {},
+                    output=output,
+                    duration_ms=duration_ms,
+                    error=error,
+                )
+
+        async def patched_read_resource(uri, **kwargs):
+            t0 = time.time()
+            error = None
+            result = None
+            try:
+                result = await original_read_resource(uri, **kwargs)
+                return result
+            except Exception as e:
+                error = str(e)
+                raise
+            finally:
+                duration_ms = int((time.time() - t0) * 1000)
+                output = None
+                if result is not None:
+                    if hasattr(result, "contents"):
+                        output = [
+                            c.model_dump() if hasattr(c, "model_dump") else str(c)
+                            for c in result.contents
+                        ]
+                    else:
+                        output = str(result)
+                target.mcp_call(
+                    server=server,
+                    tool=str(uri),
+                    kind="resource",
+                    input={"uri": str(uri)},
+                    output=output,
+                    duration_ms=duration_ms,
+                    error=error,
+                )
+
+        session.call_tool     = patched_call_tool
+        session.read_resource = patched_read_resource
+        return session

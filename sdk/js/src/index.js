@@ -61,6 +61,14 @@ class Span {
     });
   }
 
+  mcpCall({ server, tool, kind = "tool", input = null, output = null, durationMs = 0, error = null }) {
+    return this._client._send({
+      type: "mcp_call", runId: this._runId, spanId: this.spanId,
+      server, tool, kind, input, output, duration_ms: durationMs, error,
+      timestamp: this._now(),
+    });
+  }
+
   /** Create a nested child span (call .start() on it). */
   span(name) {
     return new Span(name, this._runId, this._client, this.spanId);
@@ -96,6 +104,14 @@ class AgentRun {
     return this._client._send({
       type: "tool_call", runId: this.runId,
       tool, input, output, duration_ms: durationMs, timestamp: this._now(),
+    });
+  }
+
+  mcpCall({ server, tool, kind = "tool", input = null, output = null, durationMs = 0, error = null }) {
+    return this._client._send({
+      type: "mcp_call", runId: this.runId,
+      server, tool, kind, input, output, duration_ms: durationMs, error,
+      timestamp: this._now(),
     });
   }
 
@@ -182,4 +198,82 @@ class AgentDash {
   }
 }
 
-module.exports = { AgentDash, AgentRun, Span };
+// ── MCPInstrumentation ────────────────────────────────────────────────────────
+
+/**
+ * Wraps an MCP Client so every callTool() and readResource() is automatically
+ * logged to AgentDash as an mcp_call event.
+ *
+ * Works with @modelcontextprotocol/sdk Client.
+ *
+ * Usage:
+ *   const { Client } = require("@modelcontextprotocol/sdk/client/index.js");
+ *   const { MCPInstrumentation } = require("agentdash");
+ *
+ *   const run = dash.startRun("my-agent");
+ *   const instr = new MCPInstrumentation(run, "filesystem");
+ *   client = instr.wrap(client);
+ *   await client.callTool({ name: "read_file", arguments: { path: "/tmp/a.txt" } });
+ */
+class MCPInstrumentation {
+  constructor(target, serverName = "mcp") {
+    this._target     = target;
+    this._serverName = serverName;
+  }
+
+  wrap(client) {
+    const target = this._target;
+    const server = this._serverName;
+
+    const origCallTool     = client.callTool.bind(client);
+    const origReadResource = client.readResource.bind(client);
+
+    client.callTool = async (params, ...args) => {
+      const t0 = Date.now();
+      let error = null, result = null;
+      try {
+        result = await origCallTool(params, ...args);
+        return result;
+      } catch (e) {
+        error = e.message;
+        throw e;
+      } finally {
+        target.mcpCall({
+          server,
+          tool: params.name,
+          kind: "tool",
+          input: params.arguments || {},
+          output: result?.content ?? null,
+          durationMs: Date.now() - t0,
+          error,
+        });
+      }
+    };
+
+    client.readResource = async (params, ...args) => {
+      const t0 = Date.now();
+      let error = null, result = null;
+      try {
+        result = await origReadResource(params, ...args);
+        return result;
+      } catch (e) {
+        error = e.message;
+        throw e;
+      } finally {
+        target.mcpCall({
+          server,
+          tool: params.uri,
+          kind: "resource",
+          input: { uri: params.uri },
+          output: result?.contents ?? null,
+          durationMs: Date.now() - t0,
+          error,
+        });
+      }
+    };
+
+    return client;
+  }
+}
+
+module.exports = { AgentDash, AgentRun, Span, MCPInstrumentation };

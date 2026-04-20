@@ -3,9 +3,10 @@ Span — represents a named phase within an agent run.
 Spans can be nested to model multi-step agent workflows.
 """
 
+from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .run import AgentRun
@@ -54,6 +55,23 @@ class Span:
             "input": input,
             "output": output,
             "duration_ms": duration_ms,
+            "timestamp": self._now(),
+        })
+
+    def mcp_call(self, server: str, tool: str, kind: str = "tool",
+                 input: Any = None, output: Any = None,
+                 duration_ms: int = 0, error: "str | None" = None):
+        """Record an MCP server interaction within this span."""
+        self._send({
+            "type": "mcp_call",
+            "runId": self._run.run_id,
+            "server": server,
+            "tool": tool,
+            "kind": kind,
+            "input": input,
+            "output": output,
+            "duration_ms": duration_ms,
+            "error": error,
             "timestamp": self._now(),
         })
 

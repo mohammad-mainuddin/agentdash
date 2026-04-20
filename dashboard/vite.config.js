@@ -7,7 +7,7 @@ export default defineConfig({
     port: 3000,
     proxy: {
       "/api": {
-        target: "http://server:4242",
+        target: process.env.VITE_SERVER_URL || "http://server:4242",
         rewrite: (path) => path.replace(/^\/api/, ""),
       },
     },

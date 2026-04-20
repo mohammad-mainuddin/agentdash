@@ -60,6 +60,24 @@ class AgentRun:
             "timestamp": self._now(),
         })
 
+    def mcp_call(self, server: str, tool: str, kind: str = "tool",
+                 input: Any = None, output: Any = None,
+                 duration_ms: int = 0, error: "str | None" = None):
+        """Record an MCP server interaction (tool call, resource read, etc.)."""
+        self._client._send({
+            "type": "mcp_call",
+            "runId": self.run_id,
+            "server": server,
+            "tool": tool,
+            "kind": kind,
+            "input": input,
+            "output": output,
+            "duration_ms": duration_ms,
+            "error": error,
+            "tokenCount": self._token_count(input, output),
+            "timestamp": self._now(),
+        })
+
     def span(self, name: str) -> Span:
         """
         Start a named phase within this run.

@@ -31,7 +31,7 @@ With auto-instrumentation:
 from .client import AgentDash
 from .run import AgentRun
 from .span import Span
-from .instrumentation import AnthropicInstrumentation, OpenAIInstrumentation
+from .instrumentation import AnthropicInstrumentation, OpenAIInstrumentation, MCPInstrumentation
 
-__all__ = ["AgentDash", "AgentRun", "Span", "AnthropicInstrumentation", "OpenAIInstrumentation"]
+__all__ = ["AgentDash", "AgentRun", "Span", "AnthropicInstrumentation", "OpenAIInstrumentation", "MCPInstrumentation"]
 __version__ = "1.0.0"
