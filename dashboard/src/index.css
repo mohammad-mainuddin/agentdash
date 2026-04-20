@@ -2,6 +2,36 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Theme variables ──────────────────────────────────────────────────────── */
+
+:root {
+  --c-bg:      248 249 250;
+  --c-surface: 255 255 255;
+  --c-border:  226 232 240;
+  --c-muted:   241 245 249;
+  --c-text:    26  35  50;
+  --c-dim:     100 116 139;
+  --c-green:   5   150 105;
+  --c-cyan:    2   132 199;
+  --c-amber:   217 119 6;
+  --c-red:     220 38  38;
+  --c-purple:  109 40  217;
+}
+
+.dark {
+  --c-bg:      10  14  19;
+  --c-surface: 15  20  25;
+  --c-border:  26  35  50;
+  --c-muted:   36  48  64;
+  --c-text:    168 184 200;
+  --c-dim:     74  96  128;
+  --c-green:   0   255 136;
+  --c-cyan:    0   212 255;
+  --c-amber:   255 170 0;
+  --c-red:     255 68  102;
+  --c-purple:  204 136 255;
+}
+
 @layer base {
   * { box-sizing: border-box; }
 

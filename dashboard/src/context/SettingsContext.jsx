@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 
 const SettingsContext = createContext(null);
 
@@ -13,6 +13,10 @@ export function SettingsProvider({ children }) {
   const [darkMode, setDarkMode] = useState(
     () => localStorage.getItem("agentdash_dark") !== "false"
   );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", darkMode);
+  }, [darkMode]);
 
   const updateServer = (url) => {
     setServerUrl(url);
@@ -30,7 +34,7 @@ export function SettingsProvider({ children }) {
 
   return (
     <SettingsContext.Provider value={{ serverUrl, wsUrl, darkMode, updateServer, toggleDark }}>
-      <div className={darkMode ? "dark" : ""}>{children}</div>
+      {children}
     </SettingsContext.Provider>
   );
 }
