@@ -30,9 +30,7 @@ jobs:
         working-directory: server
 
       - name: Run server tests
-        run: npx jest tests/server.test.js --rootDir . --forceExit
-        env:
-          NODE_PATH: server/node_modules
+        run: node server/node_modules/.bin/jest tests/server.test.js --forceExit
 
   # ── Python SDK tests ───────────────────────────────────────────────────────
   test-sdk-python:
@@ -51,13 +49,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install SDK + test deps
-        run: |
-          pip install websocket-client tiktoken anthropic pytest
-          pip install -e sdk/python
+      - name: Install deps
+        run: pip install websocket-client tiktoken anthropic pytest
 
       - name: Run Python SDK tests
         run: pytest tests/test_sdk.py -v
+        env:
+          PYTHONPATH: sdk/python
 
   # ── Lint ──────────────────────────────────────────────────────────────────
   lint:
