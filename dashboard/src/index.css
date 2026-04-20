@@ -1,0 +1,76 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * { box-sizing: border-box; }
+
+  body {
+    @apply bg-terminal-bg text-terminal-text font-mono;
+    background-image:
+      radial-gradient(ellipse at 20% 50%, rgba(0, 255, 136, 0.03) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(0, 212, 255, 0.03) 0%, transparent 50%);
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-terminal-muted rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-terminal-dim; }
+}
+
+@layer components {
+  .card {
+    @apply bg-terminal-surface border border-terminal-border rounded-lg;
+  }
+
+  .badge-running {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono;
+    @apply bg-terminal-green/10 text-terminal-green border border-terminal-green/20;
+  }
+
+  .badge-success {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono;
+    @apply bg-terminal-cyan/10 text-terminal-cyan border border-terminal-cyan/20;
+  }
+
+  .badge-error {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-xs font-mono;
+    @apply bg-terminal-red/10 text-terminal-red border border-terminal-red/20;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 px-3 py-2 rounded text-sm text-terminal-dim
+           hover:text-terminal-text hover:bg-terminal-muted/50 transition-colors;
+  }
+
+  .nav-link.active {
+    @apply text-terminal-green bg-terminal-green/10 border-l-2 border-terminal-green;
+  }
+
+  .input {
+    @apply w-full px-3 py-2 rounded bg-terminal-bg border border-terminal-border
+           text-terminal-text font-mono text-sm placeholder-terminal-dim
+           focus:outline-none focus:border-terminal-cyan transition-colors;
+  }
+
+  .btn-primary {
+    @apply px-4 py-2 rounded bg-terminal-green/20 border border-terminal-green/40
+           text-terminal-green text-sm font-mono hover:bg-terminal-green/30 transition-colors;
+  }
+
+  .btn-danger {
+    @apply px-4 py-2 rounded bg-terminal-red/10 border border-terminal-red/30
+           text-terminal-red text-sm font-mono hover:bg-terminal-red/20 transition-colors;
+  }
+
+  /* Live dot indicator */
+  .live-dot {
+    @apply w-2 h-2 rounded-full bg-terminal-green;
+    animation: livePulse 2s ease-in-out infinite;
+  }
+
+  @keyframes livePulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(0,255,136,0.4); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 4px rgba(0,255,136,0); }
+  }
+}

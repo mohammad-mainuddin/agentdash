@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Node.js server tests ───────────────────────────────────────────────────
+  test-server:
+    name: Server tests (Node.js)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: server/package.json
+
+      - name: Install server deps
+        run: npm install
+
+      - name: Install test deps
+        run: npm install --no-save jest supertest
+
+      - name: Run server tests
+        run: npx jest ../tests/server.test.js --forceExit
+
+  # ── Python SDK tests ───────────────────────────────────────────────────────
+  test-sdk-python:
+    name: Python SDK tests
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install SDK + test deps
+        run: |
+          pip install websocket-client tiktoken anthropic pytest
+
+      - name: Run Python SDK tests
+        run: pytest tests/test_sdk.py -v
+
+  # ── Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Check Python syntax
+        run: python -m py_compile sdk/python/agentdash/*.py
+
+      - name: Check JS syntax
+        run: node --check sdk/js/src/index.js && node --check server/index.js
+
+  # ── Docker build check ────────────────────────────────────────────────────
+  docker-build:
+    name: Docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build server image
+        run: docker build -t agentdash-server ./server
+
+      - name: Build dashboard image
+        run: docker build -t agentdash-dashboard ./dashboard

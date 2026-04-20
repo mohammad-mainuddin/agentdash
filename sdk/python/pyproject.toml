@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "agentdash"
+version = "1.0.0"
+description = "Real-time monitoring dashboard for AI agents"
+readme = "../../README.md"
+license = { text = "MIT" }
+authors = [{ name = "AgentDash Contributors" }]
+keywords = ["ai", "agents", "monitoring", "observability", "llm"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Software Development :: Debuggers",
+  "Intended Audience :: Developers",
+]
+requires-python = ">=3.10"
+dependencies = ["websocket-client>=1.7.0"]
+
+[project.optional-dependencies]
+tiktoken = ["tiktoken>=0.6.0"]
+anthropic = ["anthropic>=0.25.0"]
+all = ["tiktoken>=0.6.0", "anthropic>=0.25.0"]
+dev = ["pytest>=8.0", "pytest-asyncio", "anthropic>=0.25.0", "tiktoken>=0.6.0"]
+
+[project.urls]
+Homepage = "https://github.com/yourname/agentdash"
+Repository = "https://github.com/yourname/agentdash"
+Issues = "https://github.com/yourname/agentdash/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentdash*"]
