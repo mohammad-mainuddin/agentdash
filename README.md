@@ -9,6 +9,25 @@ AgentDash gives you a terminal-style dashboard to observe every log, tool call, 
 
 ---
 
+## Screenshots
+
+**Overview — live activity feed + stat cards**
+![Overview](docs/screenshot-overview-clean.png)
+
+**Runs — filter by project, agent name, status**
+![Runs](docs/screenshot-runs-clean.png)
+
+**Projects — team-scale monitoring with agent registry**
+![Projects](docs/screenshot-projects-clean.png)
+
+**Trends — runs/day, tokens/day, cost, error rate charts**
+![Trends](docs/screenshot-trends-clean.png)
+
+**Run Detail — logs, prompts, tools, span tree**
+![Run Detail](docs/screenshot-run-detail-clean.png)
+
+---
+
 ## What it does
 
 | Feature | Detail |
