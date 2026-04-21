@@ -12,6 +12,9 @@ function StatCard({ label, value, color = "text-terminal-green", sub }) {
   );
 }
 
+// hide internal span events from the overview feed — too noisy
+const HIDDEN_TYPES = new Set(["span_start", "span_end"]);
+
 function EventRow({ event }) {
   const icons = {
     log: "›", tool_call: "⚡", mcp_call: "⬡",
@@ -91,13 +94,15 @@ export default function HomePage() {
           </div>
         </div>
         <div className="px-5 py-2 max-h-96 overflow-auto">
-          {stats.recentEvents.length === 0 ? (
+          {stats.recentEvents.filter((e) => !HIDDEN_TYPES.has(e.type)).length === 0 ? (
             <div className="py-8 text-center text-terminal-dim text-sm">
               <div className="text-2xl mb-2">◎</div>
               No activity yet. Connect an agent to see events.
             </div>
           ) : (
-            stats.recentEvents.map((e) => <EventRow key={e.id} event={e} />)
+            stats.recentEvents
+              .filter((e) => !HIDDEN_TYPES.has(e.type))
+              .map((e) => <EventRow key={e.id} event={e} />)
           )}
         </div>
       </div>

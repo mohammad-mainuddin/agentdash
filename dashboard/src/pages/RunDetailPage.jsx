@@ -410,7 +410,14 @@ export default function RunDetailPage() {
           <button onClick={() => navigate("/runs")} className="text-xs text-terminal-dim hover:text-terminal-text mb-2 flex items-center gap-1">
             ← Back to runs
           </button>
-          <h1 className="text-xl font-display font-bold text-terminal-text">{run.agent_name}</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h1 className="text-xl font-display font-bold text-terminal-text">{run.agent_name}</h1>
+            {run.project && (
+              <span className="text-xs text-terminal-cyan bg-terminal-cyan/10 px-2 py-0.5 rounded font-mono">
+                {run.project}
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-3 mt-1 flex-wrap">
             <StatusBadge status={run.status} />
             <span className="text-xs text-terminal-dim font-mono">{run.id}</span>

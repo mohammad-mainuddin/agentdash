@@ -32,20 +32,25 @@ function ProjectCard({ p, onClick }) {
   return (
     <div
       onClick={onClick}
-      className="card p-5 cursor-pointer hover:border-terminal-green/40 transition-colors animate-fade-in"
+      className="card p-5 cursor-pointer hover:border-terminal-green/40 hover:shadow-md transition-all animate-fade-in group"
     >
       <div className="flex items-start justify-between mb-3">
         <div>
-          <div className="text-base font-display font-bold text-terminal-text">{p.project}</div>
+          <div className="text-base font-display font-bold text-terminal-text group-hover:text-terminal-green transition-colors">
+            {p.project}
+          </div>
           <div className="text-xs text-terminal-dim mt-0.5">
             {p.agent_count} agent{p.agent_count !== 1 ? "s" : ""} · last active {timeAgo(p.last_run_at)}
           </div>
         </div>
-        {p.active_count > 0 && (
-          <span className="flex items-center gap-1 text-xs text-terminal-green bg-terminal-green/10 px-2 py-0.5 rounded-full">
-            <span className="live-dot" />{p.active_count} running
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {p.active_count > 0 && (
+            <span className="flex items-center gap-1 text-xs text-terminal-green bg-terminal-green/10 px-2 py-0.5 rounded-full">
+              <span className="live-dot" />{p.active_count} running
+            </span>
+          )}
+          <span className="text-terminal-dim group-hover:text-terminal-green text-sm transition-colors">→</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-4 gap-3 pt-3 border-t border-terminal-border">

@@ -20,14 +20,20 @@ function costStr(run) {
 }
 
 export default function RunsPage() {
-  const [runs, setRuns]       = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [searchParams]        = useSearchParams();
-  const [search, setSearch]   = useState(searchParams.get("q") || "");
-  const [status, setStatus]   = useState("");
-  const [project, setProject] = useState(searchParams.get("project") || "");
+  const [runs, setRuns]         = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading]   = useState(true);
+  const [searchParams]          = useSearchParams();
+  const [search, setSearch]     = useState(searchParams.get("q") || "");
+  const [status, setStatus]     = useState("");
+  const [project, setProject]   = useState(searchParams.get("project") || "");
   const { subscribe } = useWs();
   const navigate = useNavigate();
+
+  // load project list once for the dropdown
+  useEffect(() => {
+    api.getProjects().then(setProjects).catch(console.error);
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -59,12 +65,16 @@ export default function RunsPage() {
         </div>
 
         {/* Project filter */}
-        <input
-          className="input w-40 text-sm"
-          placeholder="Project…"
+        <select
+          className="input w-44 text-sm"
           value={project}
           onChange={(e) => setProject(e.target.value)}
-        />
+        >
+          <option value="">All projects</option>
+          {projects.map((p) => (
+            <option key={p.project} value={p.project}>{p.project}</option>
+          ))}
+        </select>
 
         {/* Search */}
         <input
