@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWs } from "../context/WsContext";
 import { api } from "../lib/api";
 
@@ -15,7 +16,7 @@ function StatCard({ label, value, color = "text-terminal-green", sub }) {
 // hide internal span events from the overview feed — too noisy
 const HIDDEN_TYPES = new Set(["span_start", "span_end"]);
 
-function EventRow({ event }) {
+function EventRow({ event, onNavigate }) {
   const icons = {
     log: "›", tool_call: "⚡", mcp_call: "⬡",
     llm_call: "◈", run_start: "▶", run_end: "■",
@@ -34,8 +35,14 @@ function EventRow({ event }) {
     event.type === "run_start" ? `run started · ${event.agent_name}` :
     event.type === "run_end"   ? `run ended · ${event.data?.status}` : event.type;
 
+  const runId = event.run_id || event.runId;
+
   return (
-    <div className="flex items-start gap-3 py-2 border-b border-terminal-border/40 animate-fade-in">
+    <div
+      onClick={() => runId && onNavigate(`/runs/${runId}`)}
+      className={`flex items-start gap-3 py-2.5 border-b border-terminal-border/40 animate-fade-in group
+        ${runId ? "cursor-pointer hover:bg-terminal-muted/30 -mx-5 px-5 transition-colors rounded" : ""}`}
+    >
       <span className={`text-sm mt-0.5 w-4 flex-shrink-0 ${colors[event.type] || "text-terminal-dim"}`}>
         {icons[event.type] || "·"}
       </span>
@@ -48,12 +55,18 @@ function EventRow({ event }) {
       <span className={`text-xs px-1.5 py-0.5 rounded bg-terminal-muted/50 flex-shrink-0 ${colors[event.type] || "text-terminal-dim"}`}>
         {event.type}
       </span>
+      {runId && (
+        <span className="text-terminal-dim text-xs opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+          →
+        </span>
+      )}
     </div>
   );
 }
 
 export default function HomePage() {
   const { subscribe } = useWs();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     total: 0, active: 0, tokens: 0, cost: 0, llmCalls: 0, recentEvents: [],
   });
@@ -102,7 +115,7 @@ export default function HomePage() {
           ) : (
             stats.recentEvents
               .filter((e) => !HIDDEN_TYPES.has(e.type))
-              .map((e) => <EventRow key={e.id} event={e} />)
+              .map((e) => <EventRow key={e.id} event={e} onNavigate={navigate} />)
           )}
         </div>
       </div>
